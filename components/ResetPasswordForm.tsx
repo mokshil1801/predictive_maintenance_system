@@ -8,10 +8,10 @@ import { AuthShell } from "@/components/AuthShell";
 import { Button } from "@/components/Button";
 import { isStrongPassword, resetPassword } from "@/lib/auth-client";
 
-export function ResetPasswordForm() {
+export function ResetPasswordForm({ tokenOverride = "" }: { tokenOverride?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get("token") || "";
+  const token = tokenOverride || searchParams.get("token") || "";
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");

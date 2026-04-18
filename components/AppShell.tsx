@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { Sidebar, type SidebarItem } from "@/components/Sidebar";
 
@@ -14,6 +18,49 @@ export function AppShell({
   roleLabel: string;
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const token = window.localStorage.getItem("fixahead_auth_token");
+    const storedUser = window.localStorage.getItem("fixahead_auth_user");
+
+    if (!token) {
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      return;
+    }
+
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        const allowedByPath: Record<string, string[]> = {
+          "/dashboard": ["deo"],
+          "/principal": ["principal", "deo"],
+          "/report": ["peon", "principal", "deo"],
+          "/contractor": ["contractor", "deo"],
+        };
+        const allowedRoles = allowedByPath[activeHref];
+
+        if (allowedRoles && !allowedRoles.includes(user.role)) {
+          const roleHome: Record<string, string> = {
+            peon: "/report",
+            principal: "/principal",
+            deo: "/dashboard",
+            contractor: "/contractor",
+          };
+          router.replace(roleHome[user.role] || "/login");
+          return;
+        }
+      } catch (_error) {
+        router.replace("/login");
+        return;
+      }
+    }
+
+    setReady(true);
+  }, [activeHref, pathname, router]);
+
   const items: SidebarItem[] = [
     { href: "/dashboard", label: "DEO Dashboard", icon: "dashboard" },
     { href: "/principal", label: "Principal View", icon: "principal" },
@@ -28,7 +75,13 @@ export function AppShell({
         <Sidebar activeHref={activeHref} items={items} />
         <main className="space-y-4">
           <Navbar title={title} subtitle={subtitle} roleLabel={roleLabel} />
-          {children}
+          {ready ? (
+            children
+          ) : (
+            <div className="rounded-[30px] border border-white/70 bg-white/85 p-8 text-center text-sm text-text-muted">
+              Checking secure access...
+            </div>
+          )}
         </main>
       </div>
     </div>

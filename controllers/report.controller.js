@@ -1,5 +1,11 @@
 const { Prediction, Report, School } = require("../models");
 const { callMLModel } = require("../services/ml.service");
+const { emitWorkflowEvent, workflowRooms } = require("../services/realtime.service");
+const {
+  calculateImpactScore,
+  calculatePriorityScore,
+  calculateUrgencyScore,
+} = require("../utils/priority.util");
 
 function toBinary(value) {
   if (typeof value === "boolean") {
@@ -11,34 +17,6 @@ function toBinary(value) {
 
 function clamp(value, minimum, maximum) {
   return Math.max(minimum, Math.min(maximum, value));
-}
-
-function calculatePriorityScore({
-  riskScore,
-  failureWindowDays,
-  totalStudents,
-  isGirlsSchool,
-  category,
-}) {
-  const urgencyWeight = 60 - clamp(failureWindowDays, 30, 60);
-  const studentImpactWeight = clamp(Number(totalStudents || 0) / 20, 0, 25);
-  const girlsSchoolWeight = isGirlsSchool ? 5 : 0;
-  const categoryWeightMap = {
-    plumbing: 4,
-    electrical: 6,
-    structural: 7,
-  };
-  const categoryWeight = categoryWeightMap[category] || 0;
-
-  return Number(
-    (
-      riskScore * 0.55 +
-      urgencyWeight * 0.9 +
-      studentImpactWeight +
-      girlsSchoolWeight +
-      categoryWeight
-    ).toFixed(2),
-  );
 }
 
 async function createReport(req, res, next) {
@@ -55,6 +33,7 @@ async function createReport(req, res, next) {
       toiletFunctionality,
       photoUrl,
     } = req.body;
+    const uploadedPhotoUrl = req.file ? `/uploads/${req.file.filename}` : photoUrl;
 
     const report = await Report.create({
       schoolId,
@@ -66,7 +45,7 @@ async function createReport(req, res, next) {
       wiringExposed,
       crackWidth,
       toiletFunctionality,
-      photoUrl: photoUrl || null,
+      photoUrl: uploadedPhotoUrl || null,
     });
 
     const school = await School.findById(schoolId)
@@ -91,26 +70,57 @@ async function createReport(req, res, next) {
     };
 
     const mlPrediction = await callMLModel(mlPayload);
-    const priorityScore = calculatePriorityScore({
-      riskScore: Number(mlPrediction.riskScore),
-      failureWindowDays: Number(mlPrediction.failureWindowDays),
+    const failureWindowDays = clamp(Number(mlPrediction.failureWindowDays), 30, 60);
+    const riskScore = Number(mlPrediction.riskScore);
+    const impactScore = calculateImpactScore({
       totalStudents: school.totalStudents,
       isGirlsSchool: school.isGirlsSchool,
       category,
+    });
+    const urgencyScore = calculateUrgencyScore(failureWindowDays);
+    const priorityScore = calculatePriorityScore({
+      riskScore,
+      impactScore,
+      urgencyScore,
     });
 
     const prediction = await Prediction.create({
       reportId: report._id,
       schoolId,
       category,
-      riskScore: Number(mlPrediction.riskScore),
-      failureWindowDays: clamp(Number(mlPrediction.failureWindowDays), 30, 60),
+      riskScore,
+      failureWindowDays,
+      impactScore,
+      urgencyScore,
       priorityScore,
       reason: Array.isArray(mlPrediction.reason) && mlPrediction.reason.length
         ? mlPrediction.reason
         : ["insufficient explainability output from ML service"],
-      status: "pending",
+      status: "awaiting_deo",
     });
+
+    const rooms = workflowRooms({ schoolId });
+    await emitWorkflowEvent(
+      "report:created",
+      { reportId: report._id.toString(), schoolId: schoolId.toString() },
+      rooms,
+    );
+    await emitWorkflowEvent(
+      "prediction:created",
+      { predictionId: prediction._id.toString(), schoolId: schoolId.toString() },
+      rooms,
+    );
+    await emitWorkflowEvent(
+      "priorityQueue:updated",
+      { predictionId: prediction._id.toString(), schoolId: schoolId.toString() },
+      rooms,
+    );
+    await emitWorkflowEvent(
+      "principalStatus:updated",
+      { predictionId: prediction._id.toString(), schoolId: schoolId.toString() },
+      rooms,
+    );
+    await emitWorkflowEvent("analytics:updated", { schoolId: schoolId.toString() }, rooms);
 
     return res.status(201).json({
       message: "Report saved and prediction generated successfully.",

@@ -32,8 +32,19 @@ const workOrderSchema = new Schema(
     status: {
       type: String,
       required: true,
-      enum: ["assigned", "in_progress", "completed"],
+      enum: ["assigned", "in_progress", "completed", "verified", "delayed"],
       default: "assigned",
+      index: true,
+    },
+    priorityScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      index: true,
+    },
+    deadline: {
+      type: Date,
+      default: null,
       index: true,
     },
     assignedAt: {

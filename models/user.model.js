@@ -18,7 +18,6 @@ const userSchema = new Schema(
       lowercase: true,
       trim: true,
       maxlength: 180,
-      index: true,
     },
     password: {
       type: String,
@@ -62,6 +61,11 @@ const userSchema = new Schema(
       index: true,
       select: false,
     },
+    verificationTokenExpiresAt: {
+      type: Date,
+      default: null,
+      select: false,
+    },
     resetPasswordToken: {
       type: String,
       default: null,
@@ -82,7 +86,15 @@ const userSchema = new Schema(
 
 userSchema.index({ role: 1, district: 1 });
 userSchema.index({ assignedSchoolId: 1, role: 1 });
-userSchema.index({ phone: 1 }, { unique: true, sparse: true });
+userSchema.index(
+  { phone: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      phone: { $type: "string" },
+    },
+  },
+);
 userSchema.pre("save", async function hashPassword() {
   if (!this.isModified("password")) {
     return;

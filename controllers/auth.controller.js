@@ -3,12 +3,12 @@ const jwt = require("jsonwebtoken");
 
 const { User } = require("../models");
 const {
+  buildEmailTemplate,
+  sendEmail,
   sendPasswordResetEmail,
-  sendVerificationEmail,
 } = require("../services/email.service");
 const { getJwtSecret } = require("../middleware/auth.middleware");
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const PASSWORD_REGEX =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
 
@@ -91,24 +91,18 @@ async function register(req, res, next) {
       return res.status(409).json({ message: "An account with this email already exists." });
     }
 
-    const verificationToken = createPlainToken();
     const user = await User.create({
       name,
       email: normalizedEmail,
       password,
       role,
-      isVerified: false,
-      verificationToken: hashToken(verificationToken),
-    });
-
-    await sendVerificationEmail({
-      email: user.email,
-      name: user.name,
-      token: verificationToken,
+      isVerified: true,
+      verificationToken: null,
+      verificationTokenExpiresAt: null,
     });
 
     return res.status(201).json({
-      message: "Registration successful. Check your email to verify your account.",
+      message: "Registration successful. You can now log in.",
     });
   } catch (error) {
     return next(error);
@@ -135,12 +129,6 @@ async function login(req, res, next) {
       return res.status(401).json({ message: "Invalid email or password." });
     }
 
-    if (!user.isVerified) {
-      return res.status(403).json({
-        message: "Verify your email before logging in.",
-      });
-    }
-
     const token = signAuthToken(user);
 
     return res.status(200).json({
@@ -148,27 +136,6 @@ async function login(req, res, next) {
       token,
       user: serializeUser(user),
     });
-  } catch (error) {
-    return next(error);
-  }
-}
-
-async function verifyEmail(req, res, next) {
-  try {
-    const hashedToken = hashToken(req.params.token);
-    const user = await User.findOne({ verificationToken: hashedToken }).select(
-      "+verificationToken",
-    );
-
-    if (!user) {
-      return res.redirect(`${FRONTEND_URL}/login?verified=invalid`);
-    }
-
-    user.isVerified = true;
-    user.verificationToken = null;
-    await user.save();
-
-    return res.redirect(`${FRONTEND_URL}/login?verified=1`);
   } catch (error) {
     return next(error);
   }
@@ -213,7 +180,8 @@ async function forgotPassword(req, res, next) {
 
 async function resetPassword(req, res, next) {
   try {
-    const { token, password, confirmPassword } = req.body;
+    const token = req.params.token || req.body.token;
+    const { password, confirmPassword } = req.body;
 
     if (!token || !password || !confirmPassword) {
       return res.status(400).json({ message: "Token and passwords are required." });
@@ -252,6 +220,33 @@ async function resetPassword(req, res, next) {
   }
 }
 
+async function sendTestEmail(req, res, next) {
+  try {
+    const { to } = req.body;
+
+    if (!to || !isValidEmail(to)) {
+      return res.status(400).json({ message: "A valid recipient email is required." });
+    }
+
+    const html = buildEmailTemplate({
+      title: "FixAhead email test",
+      preheader: "Your FixAhead Gmail SMTP setup is working.",
+      body: `
+        <p style="margin:0 0 14px;">This is a test email from FixAhead.</p>
+        <p style="margin:0;">If you received this message, Gmail SMTP is configured correctly.</p>
+      `,
+      ctaLabel: "Open FixAhead",
+      ctaUrl: process.env.FRONTEND_URL || "http://localhost:3000",
+    });
+
+    await sendEmail(to, "FixAhead email test", html);
+
+    return res.status(200).json({ message: "Test email sent successfully." });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 async function getCurrentUser(req, res, next) {
   try {
     return res.status(200).json({
@@ -265,8 +260,8 @@ async function getCurrentUser(req, res, next) {
 module.exports = {
   register,
   login,
-  verifyEmail,
   forgotPassword,
   resetPassword,
   getCurrentUser,
+  sendTestEmail,
 };

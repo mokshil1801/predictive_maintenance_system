@@ -12,7 +12,12 @@ export async function POST(request) {
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(
-      { message: error.message || "Login failed." },
+      {
+        success: false,
+        code: error.code,
+        message: error.message || "Login failed.",
+        email: error.email,
+      },
       { status: error.status || 500 },
     );
   }

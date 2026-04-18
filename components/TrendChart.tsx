@@ -10,7 +10,7 @@ export function TrendChart({
   const width = 460;
   const height = 220;
   const normalized = points.map((point, index) => {
-    const x = (index / (points.length - 1)) * width;
+    const x = points.length === 1 ? width / 2 : (index / (points.length - 1)) * width;
     const y = height - ((point - min) / Math.max(max - min, 1)) * (height - 36) - 18;
     return `${x},${y}`;
   });

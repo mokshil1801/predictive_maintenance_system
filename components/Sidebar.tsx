@@ -66,8 +66,7 @@ export function Sidebar({
           Weekly Condition Entry
         </Button>
         <div className="rounded-2xl bg-surface-muted p-4 text-sm text-text-muted">
-          Next DEO review:
-          <div className="mt-1 font-semibold text-text">Monday, 10:30 AM</div>
+          Dashboard data is synchronized from MongoDB and Socket.IO events.
         </div>
       </div>
     </aside>

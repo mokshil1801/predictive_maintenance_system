@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { RiskLevel } from "@/lib/fixahead-data";
+import type { RiskLevel } from "@/lib/fixahead-client";
 
 const badgeClasses: Record<RiskLevel | "neutral", string> = {
   critical: "bg-red-50 text-red-700 ring-red-200",

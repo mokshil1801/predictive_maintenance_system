@@ -16,6 +16,26 @@ const API_BASE_URL =
 const TOKEN_STORAGE_KEY = "fixahead_auth_token";
 const USER_STORAGE_KEY = "fixahead_auth_user";
 
+type ApiErrorPayload = {
+  message?: string;
+  code?: string;
+  email?: string;
+};
+
+export class AuthApiError extends Error {
+  code?: string;
+  email?: string;
+  status: number;
+
+  constructor(message: string, status: number, payload: ApiErrorPayload = {}) {
+    super(message);
+    this.name = "AuthApiError";
+    this.code = payload.code;
+    this.email = payload.email;
+    this.status = status;
+  }
+}
+
 function getErrorMessage(payload: unknown, fallback: string) {
   if (
     typeof payload === "object" &&
@@ -41,7 +61,11 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(getErrorMessage(payload, "Authentication request failed."));
+    throw new AuthApiError(
+      getErrorMessage(payload, "Authentication request failed."),
+      response.status,
+      typeof payload === "object" && payload !== null ? (payload as ApiErrorPayload) : {},
+    );
   }
 
   return payload as T;

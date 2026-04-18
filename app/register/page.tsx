@@ -83,7 +83,7 @@ export default function RegisterPage() {
   return (
     <AuthShell
       title="Register a FixAhead account"
-      subtitle="Create a verified account for school reporting, approval monitoring, or contractor execution."
+      subtitle="Create an account for school reporting, approval monitoring, or contractor execution."
     >
       <div className="space-y-6">
         <div className="space-y-2">
@@ -97,7 +97,7 @@ export default function RegisterPage() {
 
         {success ? (
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            {success} Check your email.
+            {success}
           </div>
         ) : null}
 

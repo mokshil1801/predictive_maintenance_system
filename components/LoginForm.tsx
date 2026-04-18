@@ -20,16 +20,7 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false);
 
   const statusMessage = useMemo(() => {
-    const verified = searchParams.get("verified");
     const reset = searchParams.get("reset");
-
-    if (verified === "1") {
-      return "Email verified. You can now log in to FixAhead.";
-    }
-
-    if (verified === "invalid") {
-      return "Verification link is invalid or has already been used.";
-    }
 
     if (reset === "1") {
       return "Password updated successfully. Log in with your new password.";
@@ -61,7 +52,7 @@ export function LoginForm() {
   return (
     <AuthShell
       title="Login to FixAhead"
-      subtitle="Access verified dashboards for school reporting, district review, and contractor execution."
+      subtitle="Access dashboards for school reporting, district review, and contractor execution."
     >
       <div className="space-y-6">
         <div className="space-y-2">
