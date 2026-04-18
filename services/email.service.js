@@ -2,7 +2,7 @@ const nodemailer = require("nodemailer");
 
 const APP_NAME = "FixAhead";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:5000";
+const BACKEND_URL = process.env.BACKEND_URL || FRONTEND_URL;
 const EMAIL_FROM = process.env.EMAIL_FROM || "no-reply@fixahead.local";
 
 let transporter;

@@ -11,7 +11,7 @@ export type AuthUser = {
 };
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
+  process.env.NEXT_PUBLIC_API_BASE_URL || "";
 
 const TOKEN_STORAGE_KEY = "fixahead_auth_token";
 const USER_STORAGE_KEY = "fixahead_auth_user";

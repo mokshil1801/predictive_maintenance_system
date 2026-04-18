@@ -83,16 +83,12 @@ const userSchema = new Schema(
 userSchema.index({ role: 1, district: 1 });
 userSchema.index({ assignedSchoolId: 1, role: 1 });
 userSchema.index({ phone: 1 }, { unique: true, sparse: true });
-userSchema.index({ email: 1 }, { unique: true });
-
-userSchema.pre("save", async function hashPassword(next) {
+userSchema.pre("save", async function hashPassword() {
   if (!this.isModified("password")) {
-    next();
     return;
   }
 
   this.password = await bcrypt.hash(this.password, 12);
-  next();
 });
 
 userSchema.methods.comparePassword = function comparePassword(candidatePassword) {
