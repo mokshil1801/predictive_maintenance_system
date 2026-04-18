@@ -87,6 +87,9 @@ export default function LandingPage() {
               <Link href="#faq" className="transition hover:text-text">
                 FAQ
               </Link>
+              <Button href="/login" variant="ghost">
+                Login
+              </Button>
               <Button href="/dashboard">Start Monitoring Schools</Button>
             </nav>
           </div>

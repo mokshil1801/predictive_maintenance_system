@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 
 const { Schema, model, models } = mongoose;
 
@@ -10,6 +11,21 @@ const userSchema = new Schema(
       trim: true,
       maxlength: 120,
     },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      maxlength: 180,
+      index: true,
+    },
+    password: {
+      type: String,
+      required: true,
+      minlength: 8,
+      select: false,
+    },
     role: {
       type: String,
       required: true,
@@ -18,7 +34,7 @@ const userSchema = new Schema(
     },
     phone: {
       type: String,
-      required: true,
+      default: undefined,
       trim: true,
       maxlength: 20,
     },
@@ -30,10 +46,32 @@ const userSchema = new Schema(
     },
     district: {
       type: String,
-      required: true,
+      default: null,
       trim: true,
       index: true,
       maxlength: 120,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    verificationToken: {
+      type: String,
+      default: null,
+      index: true,
+      select: false,
+    },
+    resetPasswordToken: {
+      type: String,
+      default: null,
+      index: true,
+      select: false,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+      select: false,
     },
   },
   {
@@ -44,7 +82,22 @@ const userSchema = new Schema(
 
 userSchema.index({ role: 1, district: 1 });
 userSchema.index({ assignedSchoolId: 1, role: 1 });
-userSchema.index({ phone: 1 }, { unique: true });
+userSchema.index({ phone: 1 }, { unique: true, sparse: true });
+userSchema.index({ email: 1 }, { unique: true });
+
+userSchema.pre("save", async function hashPassword(next) {
+  if (!this.isModified("password")) {
+    next();
+    return;
+  }
+
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+
+userSchema.methods.comparePassword = function comparePassword(candidatePassword) {
+  return bcrypt.compare(candidatePassword, this.password);
+};
 
 const User = models.User || model("User", userSchema);
 
