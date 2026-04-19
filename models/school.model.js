@@ -44,6 +44,12 @@ const schoolSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    principalId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
   },
   {
     timestamps: true,
@@ -53,6 +59,7 @@ const schoolSchema = new Schema(
 
 schoolSchema.index({ district: 1, name: 1 }, { unique: true });
 schoolSchema.index({ weatherZone: 1 });
+schoolSchema.index({ principalId: 1, district: 1 });
 
 const School = models.School || model("School", schoolSchema);
 

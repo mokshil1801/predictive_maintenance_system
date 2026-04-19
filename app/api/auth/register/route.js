@@ -1,15 +1,9 @@
 import { NextResponse } from "next/server";
-
-const { registerUser } = require("../../../../lib/auth-server");
-
-export const runtime = "nodejs";
+import { registerAuthUser } from "@/lib/auth-server";
 
 export async function POST(request) {
   try {
-    const payload = await request.json();
-    const result = await registerUser(payload);
-
-    return NextResponse.json(result, { status: 201 });
+    return NextResponse.json(await registerAuthUser(await request.json()), { status: 201 });
   } catch (error) {
     return NextResponse.json(
       { message: error.message || "Registration failed." },

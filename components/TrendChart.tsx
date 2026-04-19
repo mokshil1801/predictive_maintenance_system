@@ -5,6 +5,14 @@ export function TrendChart({
   points: number[];
   scoreLabel: string;
 }) {
+  if (points.length === 0) {
+    return (
+      <div className="grid min-h-[240px] place-items-center rounded-[28px] border border-border bg-white text-sm font-medium text-text-muted">
+        No reports submitted yet
+      </div>
+    );
+  }
+
   const max = Math.max(...points);
   const min = Math.min(...points);
   const width = 460;

@@ -1,20 +1,13 @@
 import { NextResponse } from "next/server";
-
-const { completeWorkOrder } = require("../../../../../../lib/fixahead-api");
-
-export const runtime = "nodejs";
+import { completeWorkOrder } from "@/lib/fixahead-api";
 
 export async function PATCH(request, { params }) {
-  const { id } = await params;
-
   try {
-    return NextResponse.json({
-      success: true,
-      ...(await completeWorkOrder(request, id)),
-    });
+    const { id } = await params;
+    return NextResponse.json({ task: await completeWorkOrder(request, id) });
   } catch (error) {
     return NextResponse.json(
-      { success: false, message: error.message || "Unable to complete task." },
+      { message: error.message || "Unable to complete contractor task.", code: error.code },
       { status: error.status || 500 },
     );
   }

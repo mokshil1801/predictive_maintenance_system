@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
-
-const { getContractorAnalytics } = require("../../../../lib/fixahead-api");
-
-export const runtime = "nodejs";
+import { getContractorAnalytics } from "@/lib/fixahead-api";
 
 export async function GET(request) {
   try {
-    return NextResponse.json({
-      success: true,
-      ...(await getContractorAnalytics(request)),
-    });
+    return NextResponse.json(await getContractorAnalytics(request));
   } catch (error) {
     return NextResponse.json(
-      { success: false, message: error.message || "Unable to load contractor analytics." },
+      { message: error.message || "Unable to load contractor analytics.", code: error.code },
       { status: error.status || 500 },
     );
   }

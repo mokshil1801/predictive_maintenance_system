@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
-
-const { getPrincipalAnalytics } = require("../../../../lib/fixahead-api");
-
-export const runtime = "nodejs";
+import { getPrincipalAnalytics } from "@/lib/fixahead-api";
 
 export async function GET(request) {
   try {
-    return NextResponse.json({
-      success: true,
-      ...(await getPrincipalAnalytics(request)),
-    });
+    return NextResponse.json(await getPrincipalAnalytics(request));
   } catch (error) {
     return NextResponse.json(
-      { success: false, message: error.message || "Unable to load principal analytics." },
+      { message: error.message || "Unable to load principal analytics.", code: error.code },
       { status: error.status || 500 },
     );
   }

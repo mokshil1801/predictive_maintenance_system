@@ -41,14 +41,14 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
             <p className="mt-4 max-w-xl text-base leading-8 text-white/80">{subtitle}</p>
             <div className="mt-8 space-y-4 rounded-[28px] bg-white/10 p-5">
               <div className="rounded-2xl bg-white/10 px-4 py-4 text-sm leading-7 text-white/85">
-                Peons submit weekly condition reports, principals monitor school status, DEOs prioritize repairs, and contractors update completion proofs through one secure role-based access layer.
+                Peons submit weekly condition reports, principals monitor school status, DEOs prioritize repairs, and contractors update completion proofs through one verified identity layer.
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl bg-white/10 px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-white/60">
-                    Account access
+                    Verification
                   </p>
-                  <p className="mt-2 text-lg font-semibold">Login after registration</p>
+                  <p className="mt-2 text-lg font-semibold">Email token activation</p>
                 </div>
                 <div className="rounded-2xl bg-white/10 px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-white/60">

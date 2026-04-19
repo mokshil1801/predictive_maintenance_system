@@ -18,6 +18,7 @@ const roleOptions: Array<{ value: UserRole; label: string }> = [
 type FormState = {
   name: string;
   email: string;
+  phone: string;
   password: string;
   confirmPassword: string;
   role: UserRole;
@@ -27,6 +28,7 @@ export default function RegisterPage() {
   const [form, setForm] = useState<FormState>({
     name: "",
     email: "",
+    phone: "",
     password: "",
     confirmPassword: "",
     role: "peon",
@@ -65,6 +67,7 @@ export default function RegisterPage() {
       setForm({
         name: "",
         email: "",
+        phone: "",
         password: "",
         confirmPassword: "",
         role: "peon",
@@ -127,6 +130,15 @@ export default function RegisterPage() {
               setForm((current) => ({ ...current, email: event.target.value }))
             }
             required
+          />
+          <AuthField
+            label="Phone number"
+            type="tel"
+            placeholder="+91XXXXXXXXXX"
+            value={form.phone}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, phone: event.target.value }))
+            }
           />
           <AuthSelect
             label="Role"

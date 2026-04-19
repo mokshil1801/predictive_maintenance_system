@@ -20,9 +20,11 @@ export type SidebarItem = {
 export function Sidebar({
   activeHref,
   items,
+  primaryHref = "/report",
 }: {
   activeHref: string;
   items: SidebarItem[];
+  primaryHref?: string;
 }) {
   return (
     <aside className="flex h-full flex-col rounded-[30px] border border-white/70 bg-white/90 p-5 shadow-[0_20px_50px_rgba(17,24,39,0.06)] backdrop-blur">
@@ -62,11 +64,12 @@ export function Sidebar({
       </nav>
 
       <div className="mt-auto space-y-4">
-        <Button href="/report" className="w-full">
-          Weekly Condition Entry
+        <Button href={primaryHref} className="w-full">
+          Open Workspace
         </Button>
         <div className="rounded-2xl bg-surface-muted p-4 text-sm text-text-muted">
-          Dashboard data is synchronized from MongoDB and Socket.IO events.
+          Next DEO review:
+          <div className="mt-1 font-semibold text-text">Monday, 10:30 AM</div>
         </div>
       </div>
     </aside>

@@ -1,20 +1,35 @@
 "use client";
 
 import { useEffect } from "react";
-import { getSocket } from "@/lib/socket-client";
+import { getRealtimeSocket } from "@/lib/socket-client";
 
-export function useRealtimeRefresh(events: string[], onRefresh: () => void) {
+const WORKFLOW_EVENTS = [
+  "report:created",
+  "prediction:created",
+  "priorityQueue:updated",
+  "principalStatus:updated",
+  "contractorTask:assigned",
+  "contractorTask:started",
+  "contractorTask:completed",
+  "analytics:updated",
+];
+
+export function useRealtimeRefresh(onRefresh: () => void | Promise<void>) {
   useEffect(() => {
-    const socket = getSocket();
-
-    if (!socket) {
+    const token = window.localStorage.getItem("fixahead_auth_token");
+    if (!token) {
       return;
     }
 
-    events.forEach((eventName) => socket.on(eventName, onRefresh));
+    const socket = getRealtimeSocket(token);
+    const refresh = () => {
+      void onRefresh();
+    };
+
+    WORKFLOW_EVENTS.forEach((eventName) => socket.on(eventName, refresh));
 
     return () => {
-      events.forEach((eventName) => socket.off(eventName, onRefresh));
+      WORKFLOW_EVENTS.forEach((eventName) => socket.off(eventName, refresh));
     };
-  }, [events, onRefresh]);
+  }, [onRefresh]);
 }

@@ -51,6 +51,48 @@ class FixAheadModelService:
         row = {feature: payload[feature] for feature in self.feature_columns}
         return pd.DataFrame([row], columns=self.feature_columns)
 
+    def _observed_risk(self, payload: Dict[str, float]) -> float:
+        condition_risk = 100 - float(np.clip(payload["conditionScore"], 0, 100))
+        toilet_risk = 100 - float(np.clip(payload["toiletFunctionality"], 0, 100))
+        crack_risk = float(np.clip((payload["crackWidth"] / 8) * 100, 0, 100))
+        age_risk = float(np.clip((payload["buildingAge"] / 50) * 100, 0, 100))
+        student_risk = float(np.clip((payload["totalStudents"] / 500) * 100, 0, 100))
+        leak_risk = 100 if payload["waterLeak"] >= 1 else 0
+        wiring_risk = 100 if payload["wiringExposed"] >= 1 else 0
+        girls_school_risk = 15 if payload["isGirlsSchool"] >= 1 else 0
+
+        observed = (
+            condition_risk * 0.20
+            + toilet_risk * 0.16
+            + crack_risk * 0.14
+            + age_risk * 0.10
+            + student_risk * 0.08
+            + leak_risk * 0.15
+            + wiring_risk * 0.15
+            + girls_school_risk
+        )
+        return float(np.clip(observed, 0, 100))
+
+    def _scale_risk_score(self, raw_score: float, payload: Dict[str, float]) -> float:
+        model_score = raw_score * 100 if 0 < raw_score <= 1 else raw_score
+        observed_score = self._observed_risk(payload)
+        severe_triggers = sum(
+            [
+                payload["waterLeak"] >= 1 and payload["toiletFunctionality"] <= 45,
+                payload["wiringExposed"] >= 1,
+                payload["crackWidth"] >= 5,
+                payload["conditionScore"] <= 35,
+            ]
+        )
+
+        scaled = max(model_score, observed_score)
+        if severe_triggers >= 2:
+            scaled = max(scaled, 91)
+        elif severe_triggers == 1:
+            scaled = max(scaled, 75)
+
+        return float(np.clip(scaled, 0, 100))
+
     def predict(self, payload: Dict[str, float]) -> Dict[str, object]:
         if self.model is None:
             raise RuntimeError("Model has not been loaded.")
@@ -61,7 +103,7 @@ class FixAheadModelService:
         if prediction_array.ndim == 1:
             prediction_array = prediction_array.reshape(1, -1)
 
-        risk_score = float(np.clip(prediction_array[0, 0], 0, 100))
+        risk_score = self._scale_risk_score(float(prediction_array[0, 0]), payload)
         failure_window_days = int(round(float(np.clip(prediction_array[0, 1], 30, 60))))
         reason = self.generate_reason(payload)
 

@@ -38,13 +38,14 @@ const workOrderSchema = new Schema(
     },
     priorityScore: {
       type: Number,
-      default: 0,
+      required: true,
       min: 0,
-      index: true,
+      max: 100,
+      default: 0,
     },
     deadline: {
       type: Date,
-      default: null,
+      required: true,
       index: true,
     },
     assignedAt: {

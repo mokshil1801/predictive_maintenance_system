@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, TrendingUp } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
@@ -14,7 +14,6 @@ import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import {
   fetchPrincipalAnalytics,
   fetchPrincipalStatus,
-  type ChartDatum,
   type PrincipalAnalytics,
   type PrincipalStatus,
 } from "@/lib/fixahead-client";
@@ -25,82 +24,54 @@ export default function PrincipalPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadOverview = useCallback(async () => {
-    setError("");
-    setLoading(true);
-
+  const loadData = useCallback(async () => {
     try {
-      const [statusResponse, analyticsResponse] = await Promise.all([
+      setError("");
+      const [statusData, analyticsData] = await Promise.all([
         fetchPrincipalStatus(),
         fetchPrincipalAnalytics(),
       ]);
-      setStatus(statusResponse);
-      setAnalytics(analyticsResponse);
+      setStatus(statusData);
+      setAnalytics(analyticsData);
     } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Unable to load school overview.",
-      );
+      setError(loadError instanceof Error ? loadError.message : "Unable to load principal dashboard.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadOverview();
-  }, [loadOverview]);
+    void loadData();
+    const timer = window.setInterval(loadData, 8000);
+    return () => window.clearInterval(timer);
+  }, [loadData]);
 
-  useRealtimeRefresh(
-    [
-      "report:created",
-      "prediction:created",
-      "principalStatus:updated",
-      "contractorTask:assigned",
-      "contractorTask:started",
-      "contractorTask:completed",
-      "analytics:updated",
-    ],
-    loadOverview,
-  );
+  useRealtimeRefresh(loadData);
+
+  const categoryBreakdown = analytics?.charts.categoryRisk ?? [];
+  const trendPoints = analytics?.charts.conditionTrend.map((point) => point.value) ?? [];
+  const latestScore = status?.latestReport?.conditionScore ?? null;
+  const rows = (status?.issues ?? []).map((issue) => [
+    <span key={`${issue.id}-id`} className="font-medium text-text">{issue.id.slice(-8).toUpperCase()}</span>,
+    <span key={`${issue.id}-location`} className="font-medium text-text">{status?.school.name}</span>,
+    <span key={`${issue.id}-category`} className="text-text">{issue.category}</span>,
+    <span key={`${issue.id}-status`} className="text-text">{issue.status.replaceAll("_", " ")}</span>,
+    <span key={`${issue.id}-note`} className="max-w-[260px] text-text-muted">
+      {issue.contractorName ? `${issue.issue} assigned to ${issue.contractorName}` : issue.reason.join(", ")}
+    </span>,
+  ]);
 
   function exportReport() {
-    if (!status || !analytics) return;
-
     const blob = new Blob([JSON.stringify({ status, analytics }, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `fixahead-${status.school?.name || "school"}-report.json`;
-    anchor.click();
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "fixahead-school-report.json";
+    link.click();
     URL.revokeObjectURL(url);
   }
-
-  const rows = (status?.issues || []).map((issue) => [
-    <span key={`${issue.id}-id`} className="font-medium text-text">
-      FX-{issue.id.slice(-6).toUpperCase()}
-    </span>,
-    <span key={`${issue.id}-issue`} className="font-medium text-text">
-      {issue.issue}
-    </span>,
-    <span key={`${issue.id}-risk`} className="text-text">
-      {issue.riskScore} risk / {issue.priorityScore} priority
-    </span>,
-    <span key={`${issue.id}-status`} className="capitalize text-text">
-      {issue.status.replace("_", " ")}
-    </span>,
-    <span key={`${issue.id}-contractor`} className="text-text-muted">
-      {issue.contractor?.name || "Not assigned"}
-    </span>,
-    <span key={`${issue.id}-note`} className="max-w-[260px] text-text-muted">
-      {issue.reason}
-    </span>,
-  ]);
-
-  const trendPoints =
-    analytics?.charts.weeklyReportsTrend.map((item) => item.value) || [];
 
   return (
     <AppShell
@@ -110,77 +81,44 @@ export default function PrincipalPage() {
       roleLabel="Principal View"
     >
       <div className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-text-muted">
-            {status?.school
-              ? `${status.school.name}, ${status.school.district}`
-              : "No principal school assigned"}
-          </p>
-          <div className="flex gap-3">
-            <Button variant="secondary" onClick={loadOverview} disabled={loading}>
-              {loading ? "Refreshing..." : "Refresh"}
-            </Button>
-            <Button variant="secondary" onClick={exportReport} disabled={!status}>
-              <Download className="size-4" />
-              Export school report
-            </Button>
-          </div>
+        {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+
+        <div className="flex justify-end">
+          <Button variant="secondary" onClick={exportReport} disabled={!status}>
+            <Download className="size-4" />
+            Export school report
+          </Button>
         </div>
 
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        ) : null}
-
         <div className="grid gap-4 xl:grid-cols-3">
-          <KpiCard
-            label="School issue count"
-            value={loading ? "..." : String(analytics?.schoolIssueCount || 0)}
-            detail="Predictions and repair records for this school"
-          />
-          <KpiCard
-            label="Active repairs"
-            value={loading ? "..." : String(analytics?.activeRepairs || 0)}
-            detail="Awaiting DEO, assigned, in-progress, or delayed"
-          />
-          <KpiCard
-            label="Resolved repairs"
-            value={loading ? "..." : String(analytics?.resolvedRepairs || 0)}
-            detail="Completed or verified maintenance work"
-          />
+          <KpiCard label="Overall condition score" value={latestScore === null ? "0/100" : `${latestScore}/100`} detail="Latest submitted weekly report condition score" />
+          <KpiCard label="High-risk alerts" value={String((status?.issues ?? []).filter((issue) => issue.risk === "critical" || issue.risk === "high").length)} detail="Live prediction records for this school" />
+          <KpiCard label="Active maintenance" value={String(analytics?.activeRepairs ?? 0)} detail="Assigned, delayed, or in-progress work orders" />
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
           <Card className="space-y-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-text-soft">
-                  Risk overview
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-text">
-                  Current category risk
-                </h2>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-text-soft">Category breakdown</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-text">System health</h2>
               </div>
-              <Badge label="Live MongoDB data" tone="neutral" />
+              <Badge label="Updated from weekly form" tone="neutral" />
             </div>
 
             <div className="space-y-5">
-              {(analytics?.currentRiskOverview || []).length ? (
-                analytics?.currentRiskOverview.map((item) => (
+              {categoryBreakdown.length === 0 ? (
+                <p className="py-8 text-center text-sm text-text-muted">No reports submitted yet</p>
+              ) : (
+                categoryBreakdown.map((item) => (
                   <div key={item.label} className="space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="font-medium text-text">{item.label}</p>
-                      <p className="font-semibold text-text">{item.value}</p>
+                      <p className="font-semibold text-text">{item.value}%</p>
                     </div>
-                    <ProgressBar
-                      value={item.value}
-                      tone={item.value >= 72 ? "danger" : item.value >= 50 ? "warning" : "primary"}
-                    />
+                    <ProgressBar value={item.value} tone={item.value >= 70 ? "danger" : item.value >= 45 ? "warning" : "primary"} />
                   </div>
                 ))
-              ) : (
-                <p className="text-sm text-text-muted">No reports submitted yet.</p>
               )}
             </div>
           </Card>
@@ -188,93 +126,35 @@ export default function PrincipalPage() {
           <Card className="space-y-5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-text-soft">
-                  Live charts
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-text">
-                  School monitoring analytics
-                </h2>
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-text-soft">Trend chart</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-text">Campus condition trend</h2>
               </div>
               <div className="inline-flex items-center gap-2 rounded-full bg-surface-strong px-4 py-2 text-sm font-medium text-primary">
                 <TrendingUp className="size-4" />
-                Real aggregation data
+                Last 12 weekly reports
               </div>
             </div>
-            {trendPoints.length ? (
-              <TrendChart
-                points={trendPoints}
-                scoreLabel={`${analytics?.schoolIssueCount || 0} reports`}
-              />
-            ) : (
-              <div className="rounded-[24px] border border-border bg-surface-muted p-8 text-center text-sm text-text-muted">
-                No reports submitted yet.
-              </div>
-            )}
-            <LiveBarChart
-              title="Issue status distribution"
-              data={analytics?.charts.issueStatusDistribution || []}
-            />
+            <TrendChart points={trendPoints} scoreLabel={latestScore === null ? "0/100" : `${latestScore}/100`} />
           </Card>
         </div>
 
         <Card className="space-y-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-text-soft">
-                School issue table
-              </p>
-              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-text">
-                Current repair and monitoring status
-              </h2>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-text-soft">School issue table</p>
+              <h2 className="mt-2 text-3xl font-semibold tracking-tight text-text">Current repair and monitoring status</h2>
             </div>
             <p className="max-w-xl text-sm leading-7 text-text-muted">
-              This section updates through Socket.IO when reports, assignments, starts, and completions are saved.
+              Share this view with school management and district officials to explain which issues are waiting for approval, already assigned, or still under watch.
             </p>
           </div>
           {loading ? (
-            <div className="rounded-[24px] border border-border bg-surface-muted p-8 text-center text-sm text-text-muted">
-              Loading school condition data...
-            </div>
-          ) : rows.length ? (
-            <Table
-              columns={["Issue ID", "Issue", "Risk", "Status", "Contractor", "Latest note"]}
-              rows={rows}
-            />
+            <p className="py-8 text-center text-sm text-text-muted">Loading current school status...</p>
           ) : (
-            <div className="rounded-[24px] border border-border bg-surface-muted p-8 text-center text-sm text-text-muted">
-              No reports submitted yet.
-            </div>
+            <Table columns={["Issue ID", "Location", "Category", "Status", "Latest note"]} rows={rows} emptyMessage="No reports submitted yet" />
           )}
         </Card>
       </div>
     </AppShell>
-  );
-}
-
-function LiveBarChart({ title, data }: { title: string; data: ChartDatum[] }) {
-  const maxValue = Math.max(...data.map((item) => item.value), 0);
-
-  return (
-    <div className="space-y-3">
-      <p className="font-semibold text-text">{title}</p>
-      {data.length ? (
-        data.map((item) => (
-          <div key={`${title}-${item.label}`} className="space-y-1">
-            <div className="flex justify-between text-xs font-medium text-text-muted">
-              <span className="capitalize">{item.label}</span>
-              <span>{item.value}</span>
-            </div>
-            <div className="h-2 rounded-full bg-surface-muted">
-              <div
-                className="h-2 rounded-full bg-primary"
-                style={{ width: `${maxValue ? (item.value / maxValue) * 100 : 0}%` }}
-              />
-            </div>
-          </div>
-        ))
-      ) : (
-        <p className="text-sm text-text-muted">No live chart data available.</p>
-      )}
-    </div>
   );
 }

@@ -5,6 +5,7 @@ const Prediction = require("./prediction.model");
 const WorkOrder = require("./workOrder.model");
 const CompletionLog = require("./completion.model");
 const RepairFeedback = require("./feedback.model");
+const Alert = require("./alert.model");
 
 module.exports = {
   User,
@@ -14,4 +15,5 @@ module.exports = {
   WorkOrder,
   CompletionLog,
   RepairFeedback,
+  Alert,
 };

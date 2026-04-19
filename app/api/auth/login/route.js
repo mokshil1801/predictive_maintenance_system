@@ -1,23 +1,12 @@
 import { NextResponse } from "next/server";
-
-const { loginUser } = require("../../../../lib/auth-server");
-
-export const runtime = "nodejs";
+import { loginAuthUser } from "@/lib/auth-server";
 
 export async function POST(request) {
   try {
-    const payload = await request.json();
-    const result = await loginUser(payload);
-
-    return NextResponse.json(result);
+    return NextResponse.json(await loginAuthUser(await request.json()));
   } catch (error) {
     return NextResponse.json(
-      {
-        success: false,
-        code: error.code,
-        message: error.message || "Login failed.",
-        email: error.email,
-      },
+      { message: error.message || "Login failed." },
       { status: error.status || 500 },
     );
   }

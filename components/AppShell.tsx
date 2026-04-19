@@ -4,6 +4,14 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { Sidebar, type SidebarItem } from "@/components/Sidebar";
+import { decodeJwtRole, getRoleRedirectPath, type AuthUser } from "@/lib/auth-client";
+
+const requiredRoleByPath: Record<string, AuthUser["role"]> = {
+  "/dashboard": "deo",
+  "/principal": "principal",
+  "/report": "peon",
+  "/contractor": "contractor",
+};
 
 export function AppShell({
   activeHref,
@@ -24,64 +32,59 @@ export function AppShell({
 
   useEffect(() => {
     const token = window.localStorage.getItem("fixahead_auth_token");
-    const storedUser = window.localStorage.getItem("fixahead_auth_user");
+    const rawUser = window.localStorage.getItem("fixahead_auth_user");
 
-    if (!token) {
+    if (!token || !rawUser) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
       return;
     }
 
-    if (storedUser) {
-      try {
-        const user = JSON.parse(storedUser);
-        const allowedByPath: Record<string, string[]> = {
-          "/dashboard": ["deo"],
-          "/principal": ["principal", "deo"],
-          "/report": ["peon", "principal", "deo"],
-          "/contractor": ["contractor", "deo"],
-        };
-        const allowedRoles = allowedByPath[activeHref];
+    const storedUser = JSON.parse(rawUser) as AuthUser;
+    const tokenRole = decodeJwtRole(token);
+    const user = { ...storedUser, role: tokenRole || storedUser.role };
+    const requiredRole = requiredRoleByPath[activeHref];
 
-        if (allowedRoles && !allowedRoles.includes(user.role)) {
-          const roleHome: Record<string, string> = {
-            peon: "/report",
-            principal: "/principal",
-            deo: "/dashboard",
-            contractor: "/contractor",
-          };
-          router.replace(roleHome[user.role] || "/login");
-          return;
-        }
-      } catch (_error) {
-        router.replace("/login");
-        return;
-      }
+    if (requiredRole && user.role !== requiredRole) {
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      return;
     }
 
     setReady(true);
   }, [activeHref, pathname, router]);
 
-  const items: SidebarItem[] = [
+  const allItems: SidebarItem[] = [
     { href: "/dashboard", label: "DEO Dashboard", icon: "dashboard" },
     { href: "/principal", label: "Principal View", icon: "principal" },
     { href: "/report", label: "Peon Reporting", icon: "report" },
     { href: "/contractor", label: "Contractor Tasks", icon: "contractor" },
     { href: "/", label: "Programme Overview", icon: "overview" },
   ];
+  const rawUser = typeof window !== "undefined" ? window.localStorage.getItem("fixahead_auth_user") : null;
+  const rawToken = typeof window !== "undefined" ? window.localStorage.getItem("fixahead_auth_token") : null;
+  const user = rawUser
+    ? ({
+        ...(JSON.parse(rawUser) as AuthUser),
+        role: rawToken ? decodeJwtRole(rawToken) || (JSON.parse(rawUser) as AuthUser).role : (JSON.parse(rawUser) as AuthUser).role,
+      } as AuthUser)
+    : null;
+  const roleHref = user ? getRoleRedirectPath(user.role) : activeHref;
+  const items = allItems.filter((item) => item.href === roleHref || item.href === "/");
+
+  if (!ready) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-background text-sm font-medium text-text-muted">
+        Loading FixAhead workspace...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-transparent px-4 py-4 sm:px-6 lg:px-8">
       <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-[1600px] gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <Sidebar activeHref={activeHref} items={items} />
+        <Sidebar activeHref={activeHref} items={items} primaryHref={roleHref} />
         <main className="space-y-4">
           <Navbar title={title} subtitle={subtitle} roleLabel={roleLabel} />
-          {ready ? (
-            children
-          ) : (
-            <div className="rounded-[30px] border border-white/70 bg-white/85 p-8 text-center text-sm text-text-muted">
-              Checking secure access...
-            </div>
-          )}
+          {children}
         </main>
       </div>
     </div>

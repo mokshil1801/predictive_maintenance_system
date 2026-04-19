@@ -1,162 +1,96 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Camera, CheckCircle2, MapPinned } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/Badge";
 import { Button } from "@/components/Button";
 import { Card } from "@/components/Card";
-import { KpiCard } from "@/components/KpiCard";
 import { useRealtimeRefresh } from "@/hooks/useRealtimeRefresh";
 import {
   completeWorkOrder,
-  fetchContractorAnalytics,
   fetchContractorTasks,
   startContractorTask,
-  type ContractorAnalytics,
   type ContractorTask,
 } from "@/lib/fixahead-client";
 
-type GpsState = {
-  latitude: number;
-  longitude: number;
-};
-
 export default function ContractorPage() {
   const [tasks, setTasks] = useState<ContractorTask[]>([]);
-  const [analytics, setAnalytics] = useState<ContractorAnalytics | null>(null);
-  const [activeTaskId, setActiveTaskId] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
-  const [remarks, setRemarks] = useState("");
-  const [gps, setGps] = useState<GpsState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState("");
+  const [actionLoading, setActionLoading] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   const loadTasks = useCallback(async () => {
-    setError("");
-    setLoading(true);
-
     try {
-      const [response, analyticsResponse] = await Promise.all([
-        fetchContractorTasks(),
-        fetchContractorAnalytics(),
-      ]);
-      setTasks(response.tasks);
-      setAnalytics(analyticsResponse);
-      setActiveTaskId((current) => current || response.tasks[0]?.workOrderId || "");
+      setError("");
+      setTasks(await fetchContractorTasks());
     } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Unable to load contractor tasks.",
-      );
+      setError(loadError instanceof Error ? loadError.message : "Unable to load contractor tasks.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadTasks();
+    void loadTasks();
+    const timer = window.setInterval(loadTasks, 8000);
+    return () => window.clearInterval(timer);
   }, [loadTasks]);
 
-  useRealtimeRefresh(
-    [
-      "contractorTask:assigned",
-      "contractorTask:started",
-      "contractorTask:completed",
-      "analytics:updated",
-    ],
-    loadTasks,
+  useRealtimeRefresh(loadTasks);
+
+  const [activeTask, ...otherTasks] = useMemo(
+    () => tasks.filter((task) => task.status !== "completed"),
+    [tasks],
   );
 
-  const activeTask = tasks.find((task) => task.workOrderId === activeTaskId) || tasks[0];
-  const otherTasks = tasks.filter((task) => task.workOrderId !== activeTask?.workOrderId);
-
-  function captureGps() {
-    setError("");
-
-    if (!navigator.geolocation) {
-      setError("GPS is not available in this browser. Use a device with location access.");
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setGps({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-        setMessage("GPS confirmation captured.");
-      },
-      () => {
-        setError("GPS permission was unavailable. Please allow location access and try again.");
-      },
-      { enableHighAccuracy: true, timeout: 7000 },
-    );
-  }
-
-  async function handleComplete() {
-    if (!activeTask) {
-      return;
-    }
-
-    setError("");
+  async function handleStart(task: ContractorTask) {
+    setActionLoading(task.id);
     setMessage("");
-
-    if (!photo) {
-      setError("Upload a completion photo before submitting the update.");
-      return;
-    }
-
-    if (!gps) {
-      setError("Capture GPS confirmation before marking the task complete.");
-      return;
-    }
-
-    setSubmitting(true);
-
     try {
-      const formData = new FormData();
-      formData.append("workOrderId", activeTask.workOrderId);
-      formData.append("photo", photo);
-      formData.append("remarks", remarks);
-      formData.append("latitude", String(gps.latitude));
-      formData.append("longitude", String(gps.longitude));
-
-      const response = await completeWorkOrder(formData);
-      setMessage(response.message);
-      setPhoto(null);
-      setRemarks("");
-      setGps(null);
-      await loadTasks();
-    } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "Unable to submit completion update.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleStart() {
-    if (!activeTask) return;
-
-    setError("");
-    setMessage("");
-    setSubmitting(true);
-
-    try {
-      const response = await startContractorTask(activeTask.workOrderId);
-      setMessage(response.message);
+      await startContractorTask(task.id);
       await loadTasks();
     } catch (startError) {
       setError(startError instanceof Error ? startError.message : "Unable to start task.");
     } finally {
-      setSubmitting(false);
+      setActionLoading("");
+    }
+  }
+
+  async function handleComplete(task: ContractorTask) {
+    if (!photo) {
+      setError("Upload completion photo before submitting the repair update.");
+      return;
+    }
+
+    setActionLoading(task.id);
+    setMessage("");
+    setError("");
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject);
+      });
+      const formData = new FormData();
+      formData.append("photo", photo);
+      formData.append("latitude", String(position.coords.latitude));
+      formData.append("longitude", String(position.coords.longitude));
+      formData.append("remarks", `${task.issue} completed at ${task.schoolName}`);
+
+      await completeWorkOrder(task.id, formData);
+      setPhoto(null);
+      setMessage("Completion proof uploaded and task marked completed.");
+      await loadTasks();
+    } catch (completeError) {
+      setError(
+        completeError instanceof Error
+          ? completeError.message
+          : "Unable to complete task. Confirm GPS permission and try again.",
+      );
+    } finally {
+      setActionLoading("");
     }
   }
 
@@ -171,107 +105,39 @@ export default function ContractorPage() {
         <div className="w-full max-w-md space-y-4">
           <div className="space-y-2 px-2">
             <p className="text-4xl font-semibold tracking-tight text-text">Active Tasks</p>
-            <p className="text-sm text-text-muted">
-              Assigned Gujarat school infrastructure repairs from MongoDB.
-            </p>
+            <p className="text-sm text-text-muted">Gujarat school infrastructure repairs assigned to you.</p>
           </div>
 
-          <div className="flex justify-end">
-            <Button variant="secondary" onClick={loadTasks} disabled={loading}>
-              {loading ? "Refreshing..." : "Refresh Tasks"}
-            </Button>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <KpiCard
-              label="Assigned"
-              value={loading ? "..." : String(analytics?.assignedTasks || 0)}
-              detail="Tasks waiting to start"
-            />
-            <KpiCard
-              label="In progress"
-              value={loading ? "..." : String(analytics?.inProgressTasks || 0)}
-              detail="Active repair tasks"
-            />
-            <KpiCard
-              label="Completed"
-              value={loading ? "..." : String(analytics?.completedTasks || 0)}
-              detail="Finished proof uploads"
-            />
-            <KpiCard
-              label="Overdue"
-              value={loading ? "..." : String(analytics?.overdueTasks || 0)}
-              detail="Past deadline"
-            />
-          </div>
-
-          {message ? (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-              {message}
-            </div>
-          ) : null}
-
-          {error ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          ) : null}
+          {error ? <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
+          {message ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div> : null}
 
           {loading ? (
-            <Card className="rounded-[34px] p-8 text-center text-sm text-text-muted">
-              Loading assigned work orders...
-            </Card>
-          ) : activeTask ? (
+            <Card className="rounded-[34px] p-5 text-center text-sm text-text-muted">Loading contractor tasks...</Card>
+          ) : !activeTask ? (
+            <Card className="rounded-[34px] p-5 text-center text-sm text-text-muted">No contractor tasks assigned yet</Card>
+          ) : (
             <Card className="space-y-5 rounded-[34px] p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-3">
                     <span className="size-2 rounded-full bg-red-500" />
-                    <p className="text-2xl font-semibold tracking-tight text-text">
-                      {activeTask.title}
-                    </p>
+                    <p className="text-2xl font-semibold tracking-tight text-text">{activeTask.issue}</p>
                   </div>
-                  <p className="mt-3 text-sm font-semibold uppercase tracking-[0.16em] text-text-soft">
-                    {activeTask.site}
-                  </p>
+                  <p className="mt-3 text-sm font-semibold uppercase tracking-[0.16em] text-text-soft">{activeTask.schoolName}</p>
                 </div>
-                <Badge label={activeTask.deadline} tone="critical" />
+                <Badge label={new Date(activeTask.deadline).toLocaleDateString()} tone="critical" />
               </div>
-
-              <div className="flex items-center justify-between rounded-2xl bg-surface-muted px-4 py-3 text-sm">
-                <span className="font-medium capitalize text-text">
-                  Status: {activeTask.status.replace("_", " ")}
-                </span>
-                <span className="font-semibold text-primary">
-                  Priority {activeTask.priorityScore}
-                </span>
-              </div>
-
-              <p className="rounded-2xl bg-surface-muted px-4 py-3 text-sm leading-6 text-text-muted">
-                {activeTask.reason}
-              </p>
 
               <div className="space-y-3 rounded-[28px] bg-surface-muted p-4">
-                <label className="block cursor-pointer rounded-[22px] bg-white px-4 py-5 text-center transition hover:bg-surface-strong">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="sr-only"
-                    onChange={(event) => setPhoto(event.target.files?.[0] || null)}
-                  />
+                <label className="block cursor-pointer rounded-[22px] bg-white px-4 py-5 text-center">
                   <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-surface-strong text-primary">
                     <Camera className="size-5" />
                   </div>
-                  <p className="mt-3 text-base font-semibold text-text">
-                    {photo ? photo.name : "Upload completion photo"}
-                  </p>
+                  <p className="mt-3 text-base font-semibold text-text">{photo ? photo.name : "Upload completion photo"}</p>
+                  <input type="file" accept="image/*" className="sr-only" onChange={(event) => setPhoto(event.target.files?.[0] || null)} />
                 </label>
 
-                <button
-                  type="button"
-                  onClick={captureGps}
-                  className="w-full rounded-[22px] bg-white px-4 py-4 text-left transition hover:bg-surface-strong"
-                >
+                <div className="rounded-[22px] bg-white px-4 py-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="flex size-10 items-center justify-center rounded-full bg-surface-strong text-primary">
@@ -279,86 +145,50 @@ export default function ContractorPage() {
                       </div>
                       <div>
                         <p className="font-semibold text-text">GPS confirmation</p>
-                        <p className="text-sm text-text-muted">
-                          {gps
-                            ? `${gps.latitude.toFixed(5)}, ${gps.longitude.toFixed(5)}`
-                            : activeTask.location}
-                        </p>
+                        <p className="text-sm text-text-muted">{activeTask.district}</p>
                       </div>
                     </div>
-                    {gps ? (
-                      <CheckCircle2 className="size-5 text-primary" />
-                    ) : (
-                      <span className="text-xs font-semibold text-primary">Capture</span>
-                    )}
+                    <CheckCircle2 className="size-5 text-primary" />
                   </div>
-                </button>
+                </div>
 
-                <textarea
-                  value={remarks}
-                  onChange={(event) => setRemarks(event.target.value)}
-                  placeholder="Add repair notes, material used, or follow-up needed"
-                  className="min-h-24 w-full resize-none rounded-[22px] border border-border bg-white px-4 py-3 text-sm text-text outline-none transition focus:border-primary"
-                />
+                <div className="rounded-[22px] bg-white px-4 py-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-text">Status update</p>
+                      <p className="text-sm text-text-muted">{activeTask.status.replaceAll("_", " ")}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleStart(activeTask)}
+                      disabled={activeTask.status !== "assigned" || actionLoading === activeTask.id}
+                      className="flex h-7 w-12 items-center rounded-full bg-primary p-1 disabled:opacity-50"
+                    >
+                      <span className="ml-auto size-5 rounded-full bg-white" />
+                    </button>
+                  </div>
+                </div>
 
-                <Button
-                  variant="secondary"
-                  className="w-full"
-                  size="lg"
-                  onClick={handleStart}
-                  disabled={submitting || activeTask.status !== "assigned"}
-                >
-                  {submitting ? "Updating..." : "Mark In Progress"}
-                </Button>
-
-                <Button
-                  className="w-full"
-                  size="lg"
-                  onClick={handleComplete}
-                  disabled={submitting || activeTask.status === "completed"}
-                >
-                  {submitting ? "Submitting..." : "Submit Update"}
+                <Button className="w-full" size="lg" onClick={() => void handleComplete(activeTask)} disabled={actionLoading === activeTask.id}>
+                  {actionLoading === activeTask.id ? "Submitting..." : "Submit Update"}
                 </Button>
               </div>
-            </Card>
-          ) : (
-            <Card className="rounded-[34px] p-8 text-center text-sm text-text-muted">
-              No assigned tasks yet. DEO assignments will appear here.
             </Card>
           )}
 
           {otherTasks.map((task) => (
-            <button
-              key={task.workOrderId}
-              type="button"
-              onClick={() => setActiveTaskId(task.workOrderId)}
-              className="block w-full text-left"
-            >
-              <Card className="rounded-[30px] px-5 py-4 transition hover:border-primary">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`size-2 rounded-full ${
-                          task.status === "assigned"
-                            ? "bg-amber-600"
-                            : task.status === "completed"
-                              ? "bg-emerald-500"
-                              : "bg-primary"
-                        }`}
-                      />
-                      <p className="text-xl font-semibold tracking-tight text-text">
-                        {task.title}
-                      </p>
-                    </div>
-                    <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-text-soft">
-                      {task.location}
-                    </p>
+            <Card key={task.id} className="rounded-[30px] px-5 py-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <span className={`size-2 rounded-full ${task.status === "assigned" ? "bg-amber-600" : task.status === "in_progress" ? "bg-emerald-500" : "bg-primary"}`} />
+                    <p className="text-xl font-semibold tracking-tight text-text">{task.issue}</p>
                   </div>
-                  <p className="text-sm font-medium text-text-muted">{task.deadline}</p>
+                  <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-text-soft">{task.schoolName}</p>
                 </div>
-              </Card>
-            </button>
+                <p className="text-sm font-medium text-text-muted">{new Date(task.deadline).toLocaleDateString()}</p>
+              </div>
+            </Card>
           ))}
         </div>
       </div>

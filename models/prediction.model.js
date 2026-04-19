@@ -32,13 +32,8 @@ const predictionSchema = new Schema(
     failureWindowDays: {
       type: Number,
       required: true,
-      min: 30,
+      min: 1,
       max: 60,
-    },
-    priorityScore: {
-      type: Number,
-      required: true,
-      min: 0,
     },
     impactScore: {
       type: Number,
@@ -53,6 +48,12 @@ const predictionSchema = new Schema(
       min: 0,
       max: 100,
       default: 0,
+    },
+    priorityScore: {
+      type: Number,
+      required: true,
+      min: 0,
+      max: 100,
     },
     reason: {
       type: [String],

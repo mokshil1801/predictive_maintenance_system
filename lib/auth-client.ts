@@ -4,6 +4,7 @@ export type AuthUser = {
   id: string;
   name: string;
   email: string;
+  phone?: string | null;
   role: UserRole;
   isVerified: boolean;
   assignedSchoolId?: string | null;
@@ -15,26 +16,6 @@ const API_BASE_URL =
 
 const TOKEN_STORAGE_KEY = "fixahead_auth_token";
 const USER_STORAGE_KEY = "fixahead_auth_user";
-
-type ApiErrorPayload = {
-  message?: string;
-  code?: string;
-  email?: string;
-};
-
-export class AuthApiError extends Error {
-  code?: string;
-  email?: string;
-  status: number;
-
-  constructor(message: string, status: number, payload: ApiErrorPayload = {}) {
-    super(message);
-    this.name = "AuthApiError";
-    this.code = payload.code;
-    this.email = payload.email;
-    this.status = status;
-  }
-}
 
 function getErrorMessage(payload: unknown, fallback: string) {
   if (
@@ -61,11 +42,7 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new AuthApiError(
-      getErrorMessage(payload, "Authentication request failed."),
-      response.status,
-      typeof payload === "object" && payload !== null ? (payload as ApiErrorPayload) : {},
-    );
+    throw new Error(getErrorMessage(payload, "Authentication request failed."));
   }
 
   return payload as T;
@@ -95,6 +72,18 @@ export function storeAuthSession(token: string, user: AuthUser) {
   window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
 }
 
+export function decodeJwtRole(token: string): UserRole | null {
+  try {
+    const payload = token.split(".")[1];
+    const decoded = JSON.parse(window.atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return ["peon", "principal", "deo", "contractor"].includes(decoded.role)
+      ? decoded.role
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function clearAuthSession() {
   if (typeof window === "undefined") {
     return;
@@ -104,12 +93,12 @@ export function clearAuthSession() {
   window.localStorage.removeItem(USER_STORAGE_KEY);
 }
 
-export async function loginUser(email: string, password: string) {
+export async function loginUser(identifier: string, password: string) {
   return request<{ message: string; token: string; user: AuthUser }>(
     "/api/auth/login",
     {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ identifier, password }),
     },
   );
 }
@@ -117,6 +106,7 @@ export async function loginUser(email: string, password: string) {
 export async function registerUser(payload: {
   name: string;
   email: string;
+  phone?: string;
   password: string;
   confirmPassword: string;
   role: UserRole;

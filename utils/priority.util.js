@@ -1,27 +1,27 @@
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
+function clamp(value, min = 0, max = 100) {
+  return Math.min(max, Math.max(min, Number(value) || 0));
 }
 
-function calculateImpactScore({ totalStudents = 0, isGirlsSchool = false, category }) {
-  const studentLoad = clamp((Number(totalStudents) / 250) * 100, 0, 80);
-  const girlsSchoolBoost = isGirlsSchool ? 10 : 0;
-  const categoryBoost = category === "electrical" || category === "structural" ? 10 : 6;
+function calculateImpactScore({ totalStudents = 0, isGirlsSchool = false, category = "" }) {
+  const studentLoad = clamp((Number(totalStudents) / 250) * 70, 0, 70);
+  const girlsSchoolWeight = isGirlsSchool && category === "plumbing" ? 15 : 0;
+  const safetyWeight = category === "electrical" || category === "structural" ? 12 : 8;
 
-  return Number(clamp(studentLoad + girlsSchoolBoost + categoryBoost, 0, 100).toFixed(2));
+  return Math.round(clamp(studentLoad + girlsSchoolWeight + safetyWeight));
 }
 
 function calculateUrgencyScore(failureWindowDays) {
-  const windowDays = clamp(Number(failureWindowDays || 60), 1, 60);
-  return Number(clamp(((60 - windowDays) / 59) * 100, 0, 100).toFixed(2));
+  const days = Number(failureWindowDays) || 60;
+  return Math.round(clamp(((60 - days) / 30) * 100));
 }
 
 function calculatePriorityScore({ riskScore, impactScore, urgencyScore }) {
-  return Number(
-    (
-      Number(riskScore || 0) * 0.5 +
-      Number(impactScore || 0) * 0.3 +
-      Number(urgencyScore || 0) * 0.2
-    ).toFixed(2),
+  return Math.round(
+    clamp(
+      Number(riskScore) * 0.5 +
+        Number(impactScore) * 0.3 +
+        Number(urgencyScore) * 0.2,
+    ),
   );
 }
 

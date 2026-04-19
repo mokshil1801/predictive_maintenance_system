@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
-
-const { assignPrediction } = require("../../../../lib/fixahead-api");
-
-export const runtime = "nodejs";
+import { assignPrediction } from "@/lib/fixahead-api";
 
 export async function POST(request) {
   try {
-    return NextResponse.json({
-      success: true,
-      ...(await assignPrediction(request)),
-    });
+    return NextResponse.json({ task: await assignPrediction(request) }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
-      { success: false, message: error.message || "Unable to assign contractor." },
+      { message: error.message || "Unable to assign contractor.", code: error.code },
       { status: error.status || 500 },
     );
   }

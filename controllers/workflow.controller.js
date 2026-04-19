@@ -1,5 +1,7 @@
+const fs = require("fs");
 const {
   assignPrediction,
+  completeWorkOrder,
   getContractorAnalytics,
   getContractorTasks,
   getDeoAnalytics,
@@ -8,177 +10,113 @@ const {
   getPriorityQueue,
   startWorkOrder,
 } = require("../lib/fixahead-api");
-const { CompletionLog, Prediction, WorkOrder } = require("../models");
-const { emitWorkflowEvent, workflowRooms } = require("../services/realtime.service");
 
 function toNextLikeRequest(req) {
-  const url = new URL(`${req.protocol}://${req.get("host")}${req.originalUrl}`);
-
   return {
     headers: {
-      get: (name) => req.get(name),
+      get: (name) => req.headers[String(name).toLowerCase()],
     },
     nextUrl: {
-      searchParams: url.searchParams,
+      searchParams: new URLSearchParams(req.query),
     },
-    json: async () => req.body,
+    json: async () => req.body || {},
+    formData: async () => {
+      const formData = new FormData();
+      Object.entries(req.body || {}).forEach(([key, value]) => {
+        formData.append(key, value);
+      });
+
+      if (req.file) {
+        const buffer = req.file.buffer || fs.readFileSync(req.file.path);
+        formData.append(
+          req.file.fieldname || "photo",
+          new File([buffer], req.file.originalname || req.file.filename, {
+            type: req.file.mimetype,
+          }),
+        );
+      }
+
+      return formData;
+    },
   };
 }
 
-async function priorityQueue(req, res, next) {
+function sendError(res, error) {
+  return res.status(error.status || error.statusCode || 500).json({
+    message: error.message || "Unexpected FixAhead workflow error.",
+    code: error.code || "WORKFLOW_ERROR",
+  });
+}
+
+async function priorityQueue(req, res) {
   try {
-    return res.status(200).json({
-      success: true,
-      queue: await getPriorityQueue(toNextLikeRequest(req)),
-    });
+    return res.json({ items: await getPriorityQueue(toNextLikeRequest(req)) });
   } catch (error) {
-    return next(error);
+    return sendError(res, error);
   }
 }
 
-async function deoAnalytics(req, res, next) {
+async function deoAnalytics(req, res) {
   try {
-    return res.status(200).json({
-      success: true,
-      ...(await getDeoAnalytics(toNextLikeRequest(req))),
-    });
+    return res.json(await getDeoAnalytics(toNextLikeRequest(req)));
   } catch (error) {
-    return next(error);
+    return sendError(res, error);
   }
 }
 
-async function assign(req, res, next) {
+async function assign(req, res) {
   try {
-    return res.status(200).json({
-      success: true,
-      ...(await assignPrediction(toNextLikeRequest(req))),
-    });
+    return res.status(201).json({ task: await assignPrediction(toNextLikeRequest(req)) });
   } catch (error) {
-    return next(error);
+    return sendError(res, error);
   }
 }
 
-async function principalStatus(req, res, next) {
+async function principalStatus(req, res) {
   try {
-    return res.status(200).json({
-      success: true,
-      ...(await getPrincipalStatus(toNextLikeRequest(req))),
-    });
+    return res.json(await getPrincipalStatus(toNextLikeRequest(req)));
   } catch (error) {
-    return next(error);
+    return sendError(res, error);
   }
 }
 
-async function principalAnalytics(req, res, next) {
+async function principalAnalytics(req, res) {
   try {
-    return res.status(200).json({
-      success: true,
-      ...(await getPrincipalAnalytics(toNextLikeRequest(req))),
-    });
+    return res.json(await getPrincipalAnalytics(toNextLikeRequest(req)));
   } catch (error) {
-    return next(error);
+    return sendError(res, error);
   }
 }
 
-async function contractorTasks(req, res, next) {
+async function contractorTasks(req, res) {
   try {
-    return res.status(200).json({
-      success: true,
-      tasks: await getContractorTasks(toNextLikeRequest(req)),
-    });
+    return res.json({ tasks: await getContractorTasks(toNextLikeRequest(req)) });
   } catch (error) {
-    return next(error);
+    return sendError(res, error);
   }
 }
 
-async function contractorAnalytics(req, res, next) {
+async function contractorAnalytics(req, res) {
   try {
-    return res.status(200).json({
-      success: true,
-      ...(await getContractorAnalytics(toNextLikeRequest(req))),
-    });
+    return res.json(await getContractorAnalytics(toNextLikeRequest(req)));
   } catch (error) {
-    return next(error);
+    return sendError(res, error);
   }
 }
 
-async function startTask(req, res, next) {
+async function startTask(req, res) {
   try {
-    return res.status(200).json({
-      success: true,
-      ...(await startWorkOrder(toNextLikeRequest(req), req.params.id)),
-    });
+    return res.json({ task: await startWorkOrder(toNextLikeRequest(req), req.params.id) });
   } catch (error) {
-    return next(error);
+    return sendError(res, error);
   }
 }
 
-async function completeTask(req, res, next) {
+async function completeTask(req, res) {
   try {
-    const contractor = req.authenticatedUser;
-    const workOrder = await WorkOrder.findOne({
-      _id: req.params.id,
-      assignedTo: contractor._id,
-    });
-
-    if (!workOrder) {
-      return res.status(404).json({ success: false, message: "Work order was not found." });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ success: false, message: "Completion photo is required." });
-    }
-
-    const latitude = Number(req.body.latitude);
-    const longitude = Number(req.body.longitude);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      return res.status(400).json({
-        success: false,
-        message: "GPS latitude and longitude are required.",
-      });
-    }
-
-    const completionLog = await CompletionLog.create({
-      workOrderId: workOrder._id,
-      photoUrl: `/uploads/${req.file.filename}`,
-      gpsLocation: { latitude, longitude },
-      remarks: req.body.remarks || "",
-      verified: false,
-    });
-
-    workOrder.status = "completed";
-    workOrder.completedAt = new Date();
-    await workOrder.save();
-    await Prediction.updateOne(
-      { _id: workOrder.predictionId },
-      { $set: { status: "completed" } },
-    );
-
-    const payload = {
-      workOrderId: workOrder._id.toString(),
-      predictionId: workOrder.predictionId.toString(),
-      schoolId: workOrder.schoolId.toString(),
-      contractorId: contractor._id.toString(),
-      completionLogId: completionLog._id.toString(),
-    };
-    const rooms = workflowRooms({
-      schoolId: workOrder.schoolId,
-      contractorId: contractor._id,
-    });
-
-    await emitWorkflowEvent("contractorTask:completed", payload, rooms);
-    await emitWorkflowEvent("principalStatus:updated", payload, rooms);
-    await emitWorkflowEvent("priorityQueue:updated", payload, rooms);
-    await emitWorkflowEvent("analytics:updated", payload, rooms);
-
-    return res.status(200).json({
-      success: true,
-      message: "Completion proof uploaded and work order marked completed.",
-      completionLogId: completionLog._id.toString(),
-      photoUrl: `/uploads/${req.file.filename}`,
-    });
+    return res.json({ task: await completeWorkOrder(toNextLikeRequest(req), req.params.id) });
   } catch (error) {
-    return next(error);
+    return sendError(res, error);
   }
 }
 

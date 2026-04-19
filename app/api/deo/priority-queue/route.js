@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
-
-const { getPriorityQueue } = require("../../../../lib/fixahead-api");
-
-export const runtime = "nodejs";
+import { getPriorityQueue } from "@/lib/fixahead-api";
 
 export async function GET(request) {
   try {
-    return NextResponse.json({
-      success: true,
-      queue: await getPriorityQueue(request),
-    });
+    return NextResponse.json({ items: await getPriorityQueue(request) });
   } catch (error) {
     return NextResponse.json(
-      { success: false, message: error.message || "Unable to load priority queue." },
+      { message: error.message || "Unable to load priority queue.", code: error.code },
       { status: error.status || 500 },
     );
   }

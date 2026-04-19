@@ -19,7 +19,7 @@ async function checkAuth(req, res, next) {
 
     const decoded = jwt.verify(token, getJwtSecret());
     const user = await User.findById(decoded.userId).select(
-      "_id name email role isVerified assignedSchoolId district",
+      "_id name email phone role isVerified assignedSchoolId district",
     );
 
     if (!user) {
@@ -30,7 +30,10 @@ async function checkAuth(req, res, next) {
       userId: user._id.toString(),
       role: user.role,
       email: user.email,
+      phone: user.phone,
       isVerified: user.isVerified,
+      assignedSchoolId: user.assignedSchoolId,
+      district: user.district,
     };
     req.authenticatedUser = user;
 

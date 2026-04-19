@@ -11,32 +11,20 @@ export function SelectField({
   value: string;
   onChange: (value: string) => void;
 }) {
-  function splitOption(option: string) {
-    const separatorIndex = option.indexOf("|");
-
-    if (separatorIndex === -1) {
-      return { value: option, label: option };
-    }
-
-    return {
-      value: option.slice(0, separatorIndex),
-      label: option.slice(separatorIndex + 1),
-    };
-  }
-
   return (
     <div className="relative">
       <select
-        value={splitOption(value).value}
+        value={value}
         onChange={(event) => onChange(event.target.value)}
         className="w-full appearance-none rounded-2xl border border-border bg-surface px-4 py-4 pr-10 text-sm text-text outline-none transition focus:border-primary"
       >
         {options.map((option) => {
-          const parsed = splitOption(option);
-
+          const [optionValue, optionLabel] = option.includes("|")
+            ? option.split("|")
+            : [option, option];
           return (
-            <option key={parsed.value} value={parsed.value}>
-              {parsed.label}
+            <option key={optionValue} value={optionValue}>
+              {optionLabel}
             </option>
           );
         })}

@@ -15,12 +15,21 @@ import {
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [form, setForm] = useState({ identifier: "", password: "" });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const statusMessage = useMemo(() => {
+    const verified = searchParams.get("verified");
     const reset = searchParams.get("reset");
+
+    if (verified === "1") {
+      return "Email verified. You can now log in to FixAhead.";
+    }
+
+    if (verified === "invalid") {
+      return "Verification link is invalid or has already been used.";
+    }
 
     if (reset === "1") {
       return "Password updated successfully. Log in with your new password.";
@@ -35,7 +44,7 @@ export function LoginForm() {
     setLoading(true);
 
     try {
-      const response = await loginUser(form.email, form.password);
+      const response = await loginUser(form.identifier, form.password);
       storeAuthSession(response.token, response.user);
       router.push(getRoleRedirectPath(response.user.role));
     } catch (submitError) {
@@ -52,7 +61,7 @@ export function LoginForm() {
   return (
     <AuthShell
       title="Login to FixAhead"
-      subtitle="Access dashboards for school reporting, district review, and contractor execution."
+      subtitle="Access verified dashboards for school reporting, district review, and contractor execution."
     >
       <div className="space-y-6">
         <div className="space-y-2">
@@ -60,7 +69,7 @@ export function LoginForm() {
             Welcome back
           </p>
           <p className="text-sm leading-7 text-text-muted">
-            Use your registered email to continue to your role-specific FixAhead workspace.
+            Use your registered email or phone to continue to your role-specific FixAhead workspace.
           </p>
         </div>
 
@@ -78,12 +87,12 @@ export function LoginForm() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <AuthField
-            label="Email"
-            type="email"
-            placeholder="officer@fixahead.gov.in"
-            value={form.email}
+            label="Email or phone"
+            type="text"
+            placeholder="officer@fixahead.gov.in or +91XXXXXXXXXX"
+            value={form.identifier}
             onChange={(event) =>
-              setForm((current) => ({ ...current, email: event.target.value }))
+              setForm((current) => ({ ...current, identifier: event.target.value }))
             }
             required
           />

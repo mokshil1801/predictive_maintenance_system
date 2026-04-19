@@ -4,44 +4,66 @@ function setSocketServer(io) {
   ioInstance = io;
 }
 
-function emitToRooms(eventName, payload, rooms = []) {
-  const uniqueRooms = Array.from(new Set(rooms.filter(Boolean)));
+function normalizeRooms(rooms = []) {
+  return Array.from(new Set(rooms.filter(Boolean).map(String)));
+}
 
-  if (ioInstance) {
-    if (uniqueRooms.length === 0) {
-      ioInstance.emit(eventName, payload);
-    } else {
-      uniqueRooms.forEach((room) => ioInstance.to(room).emit(eventName, payload));
-    }
+async function emitViaHttp(eventName, payload, rooms) {
+  const endpoint = process.env.REALTIME_EMIT_URL;
+  const secret = process.env.REALTIME_INTERNAL_SECRET;
+
+  if (!endpoint || !secret || typeof fetch !== "function") {
+    return;
+  }
+
+  try {
+    await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": secret,
+      },
+      body: JSON.stringify({ eventName, payload, rooms }),
+    });
+  } catch (error) {
+    console.error(`[realtime] Failed to relay ${eventName}:`, error.message);
   }
 }
 
-async function emitWorkflowEvent(eventName, payload, rooms = []) {
-  emitToRooms(eventName, payload, rooms);
+async function emitToRooms(eventName, payload = {}, rooms = []) {
+  const targetRooms = normalizeRooms(rooms);
 
-  const emitUrl = process.env.REALTIME_EMIT_URL;
-  if (!ioInstance && emitUrl) {
-    try {
-      await fetch(emitUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-realtime-secret": process.env.REALTIME_INTERNAL_SECRET || "fixahead-dev-realtime",
-        },
-        body: JSON.stringify({ eventName, payload, rooms }),
-      });
-    } catch (_error) {
-      // Realtime delivery must never roll back already-saved database writes.
+  if (ioInstance) {
+    if (targetRooms.length === 0) {
+      ioInstance.emit(eventName, payload);
+      return;
     }
+
+    targetRooms.forEach((room) => {
+      ioInstance.to(room).emit(eventName, payload);
+    });
+    return;
   }
+
+  await emitViaHttp(eventName, payload, targetRooms);
+}
+
+async function emitWorkflowEvent(eventName, payload = {}, rooms = []) {
+  await emitToRooms(eventName, payload, rooms);
 }
 
 function workflowRooms({ schoolId, contractorId } = {}) {
-  return [
-    "deo_room",
-    schoolId ? `principal_${schoolId}` : null,
-    contractorId ? `contractor_${contractorId}` : null,
-  ].filter(Boolean);
+  const rooms = ["deo_room"];
+
+  if (schoolId) {
+    rooms.push(`principal_${schoolId}`);
+  }
+
+  if (contractorId) {
+    rooms.push(`contractor_${contractorId}`);
+  }
+
+  return rooms;
 }
 
 module.exports = {

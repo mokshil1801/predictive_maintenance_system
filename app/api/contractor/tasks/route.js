@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
-
-const { getContractorTasks } = require("../../../../lib/fixahead-api");
-
-export const runtime = "nodejs";
+import { getContractorTasks } from "@/lib/fixahead-api";
 
 export async function GET(request) {
   try {
-    return NextResponse.json({
-      success: true,
-      tasks: await getContractorTasks(request),
-    });
+    return NextResponse.json({ tasks: await getContractorTasks(request) });
   } catch (error) {
     return NextResponse.json(
-      { success: false, message: error.message || "Unable to load contractor tasks." },
+      { message: error.message || "Unable to load contractor tasks.", code: error.code },
       { status: error.status || 500 },
     );
   }
