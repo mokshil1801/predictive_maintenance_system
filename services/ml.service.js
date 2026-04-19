@@ -4,6 +4,7 @@ const { spawn } = require("child_process");
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || "http://localhost:8000";
 const ML_SERVICE_TIMEOUT_MS = Number(process.env.ML_SERVICE_TIMEOUT_MS || 10000);
+const ML_AUTO_START = process.env.ML_AUTO_START !== "false";
 let startupPromise = null;
 
 function sleep(ms) {
@@ -65,6 +66,7 @@ async function callMLModel(data, options = { retryWithLocalStart: true }) {
   } catch (error) {
     if (
       options.retryWithLocalStart &&
+      ML_AUTO_START &&
       (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND")
     ) {
       const started = await startLocalMLService();
