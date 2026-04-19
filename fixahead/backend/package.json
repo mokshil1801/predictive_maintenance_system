@@ -1,0 +1,21 @@
+{
+  "name": "fixahead-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "mongoose": "9.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "multer": "^2.1.1",
+    "nodemailer": "^7.0.10",
+    "socket.io": "^4.8.3",
+    "twilio": "^5.13.1"
+  }
+}
